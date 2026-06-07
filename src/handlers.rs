@@ -6,7 +6,7 @@ use color_eyre::{
 use poise::{FrameworkContext, FrameworkError, serenity_prelude::*};
 use tokio::{
     fs::{self, File},
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     time::sleep,
 };
 use tracing::error;
@@ -28,10 +28,32 @@ fn next_weekday_at(now: DateTime<Utc>, weekday: Weekday, time: NaiveTime) -> Dat
     }
 }
 
+async fn add_timestamp(internal: bool) -> Result<()> {
+    let mut timestamps = File::options()
+        .create(true)
+        .append(true)
+        .open("./data/timestamps.txt")
+        .await
+        .wrap_err("failed to open ./data/timestamps.txt")?;
+
+    timestamps
+        .write_all_buf(
+            &mut format!(
+                "Successfully posted at {} UTC, internal={internal}",
+                Utc::now().timestamp()
+            )
+            .as_bytes(),
+        )
+        .await
+        .wrap_err("failed to write to ./data/timestamps.txt")?;
+
+    Ok(())
+}
+
 /// An infinite loop that posts internal and external artist announcements.
 pub async fn post_announcements(ctx: Context, data: Data) {
     // get the biweekly flag from the file or create it
-    let open_result = File::options()
+    let biweekly_flag_file = File::options()
         .read(true)
         .write(true)
         .truncate(false)
@@ -41,7 +63,7 @@ pub async fn post_announcements(ctx: Context, data: Data) {
 
     let mut biweekly_flag = [0];
 
-    match open_result {
+    match biweekly_flag_file {
         // the error is ignored because the file is created if it doesn't exist
         Ok(mut file) => _ = file.read_exact(&mut biweekly_flag).await,
         Err(e) => {
@@ -66,24 +88,35 @@ pub async fn post_announcements(ctx: Context, data: Data) {
 
         // wait until the next announcement
         // unwrapping `to_std` is safe because `next_date` is always greater than `now`
-        sleep((next_date - now).to_std().unwrap()).await;
+        sleep((next_date - now).to_std().expect("next_date less than now")).await;
 
-        if let Err(e) = data.post_announcement(&ctx, false).await {
-            error!("Failed to post external announcement: {e:#}");
+        match data.post_announcement(&ctx, false).await {
+            Ok(()) => {
+                if let Err(e) = add_timestamp(false).await {
+                    error!("Failed to add timestamp: {e:#}")
+                }
+            }
+            Err(e) => {
+                error!("Failed to post external announcement: {e:#}");
+            }
         }
 
         if biweekly_flag {
-            if let Err(e) = data.post_announcement(&ctx, true).await {
-                error!("Failed to post internal announcement: {e:#}");
+            match data.post_announcement(&ctx, true).await {
+                Ok(()) => {
+                    if let Err(e) = add_timestamp(true).await {
+                        error!("Failed to add timestamp: {e:#}")
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to post internal announcement: {e:#}");
+                }
             }
         }
 
         biweekly_flag ^= true;
 
-        if let Err(e) = fs::write("./data/biweekly_flag.bin", [biweekly_flag as u8])
-            .await
-            .wrap_err("failed to write to ./data/biweekly_flag.bin")
-        {
+        if let Err(e) = fs::write("./data/biweekly_flag.bin", [biweekly_flag as u8]).await {
             error!("Failed to write to ./data/biweekly_flag.bin: {e:#}");
         }
     }
@@ -98,20 +131,19 @@ pub async fn event_handler(
     if let FullEvent::InteractionCreate {
         interaction: Interaction::Component(interaction),
     } = event
+        && let Err(e) = handle_poll_interaction(ctx, interaction, data).await
     {
-        if let Err(e) = handle_poll_interaction(ctx, interaction, data).await {
-            error!("Failed to handle poll interaction: {e:#}");
-            interaction
-                .create_response(
-                    &ctx,
-                    CreateInteractionResponse::Message(
-                        CreateInteractionResponseMessage::new()
-                            .content("There was an error processing your interaction.")
-                            .ephemeral(true),
-                    ),
-                )
-                .await?;
-        }
+        error!("Failed to handle poll interaction: {e:#}");
+        interaction
+            .create_response(
+                &ctx,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content("There was an error processing your interaction.")
+                        .ephemeral(true),
+                ),
+            )
+            .await?;
     }
 
     Ok(())
