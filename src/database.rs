@@ -151,6 +151,23 @@ pub async fn remove_suggestion_and_poll(pool: &SqlitePool, suggestion_id: u64) -
     .await
     .wrap_err("failed to remove suggestion")?;
 
+    let id = query!(
+        "INSERT INTO deleted_suggestions (user_id, username, artist_name, album_name, links, notes, internal, status, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        suggestion.user_id,
+        suggestion.username,
+        suggestion.artist_name,
+        suggestion.album_name,
+        suggestion.links,
+        suggestion.notes,
+        suggestion.internal,
+        -1,
+        suggestion.timestamp
+    )
+    .execute(pool)
+    .await
+    .wrap_err("failed to insert deleted suggestion")?.last_insert_rowid();
+
     let poll = query!(
         "DELETE FROM polls
          WHERE id = ?
@@ -162,21 +179,15 @@ pub async fn remove_suggestion_and_poll(pool: &SqlitePool, suggestion_id: u64) -
     .wrap_err("failed to remove poll")?;
 
     query!(
-        "INSERT INTO deleted_suggestions (user_id, username, artist_name, album_name, links, notes, internal, status, timestamp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        suggestion.user_id,
-        suggestion.username,
-        suggestion.artist_name,
-        suggestion.album_name,
-        suggestion.links,
-        suggestion.notes,
-        suggestion.internal,
+        "UPDATE deleted_suggestions
+         SET status = ?
+         WHERE id = ?",
         poll.status,
-        suggestion.timestamp
+        id
     )
     .execute(pool)
     .await
-    .wrap_err("failed to insert deleted suggestion")?;
+    .wrap_err("failed to update deleted suggestion poll status")?;
 
     Ok(())
 }
