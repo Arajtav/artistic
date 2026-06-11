@@ -176,7 +176,7 @@ async fn handle_poll_interaction(
             .create_response(
                 &ctx,
                 CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new().content("This poll no longer exists."),
+                    CreateInteractionResponseMessage::new().ephemeral(true).content("This poll no longer exists."),
                 ),
             )
             .await
