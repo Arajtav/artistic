@@ -64,10 +64,9 @@ pub struct Config {
     #[serde(rename = "facilitator-role-id")]
     pub facilitator_role: RoleId,
 
-    /// The duration in seconds between announcements.
-    /// If not zero, announcements will be sent every `announcement-period` seconds instead of the normal schedule.
+    /// When zero, not used, and announcements happen according to announcement-weekday and announcement-time.
     ///
-    /// This is used for testing.
+    /// When nonzero, the duration in seconds between announcements, and announcement-weekday and announcement-time are ignored.
     #[serde(rename = "debug-announcement-period")]
     #[serde(deserialize_with = "deserialize_duration")]
     #[serde(default)]

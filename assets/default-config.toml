@@ -31,3 +31,7 @@ poll-threshold = 0
 
 # The poll facilitator role ID.
 facilitator-role-id = 0
+
+# When zero, not used, and announcements happen according to announcement-weekday and announcement-time.
+# When nonzero, the duration in seconds between announcements, and announcement-weekday and announcement-time are ignored.
+debug-announcement-period = 0

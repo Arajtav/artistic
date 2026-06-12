@@ -109,14 +109,6 @@ impl Data {
         status: &PollStatus,
     ) -> CreateEmbed {
         let (status, color) = status.format(self.config.poll_threshold);
-        let icon_url = get_icon_url(&cache_http, self.config.guild, suggestion.user_id).await;
-
-        let embed_author = CreateEmbedAuthor::new(suggestion.username.clone())
-            .url(format!(
-                "https://discordapp.com/users/{}",
-                suggestion.user_id
-            ))
-            .icon_url(icon_url);
 
         let embed_title = format!(
             "{} Feature Artist Submission",
@@ -136,7 +128,6 @@ impl Data {
         embed_fields.push(("Status", status, false));
 
         CreateEmbed::new()
-            .author(embed_author)
             .title(embed_title)
             // .description("Users may upvote this submission with 👍")
             .fields(embed_fields)
@@ -186,15 +177,6 @@ impl Data {
     ) -> Result<()> {
         let suggestion = self.pick_suggestion(internal).await?;
 
-        let icon_url = get_icon_url(&cache_http, self.config.guild, suggestion.user_id).await;
-
-        let embed_author = CreateEmbedAuthor::new(suggestion.username.clone())
-            .url(format!(
-                "https://discordapp.com/users/{}",
-                suggestion.user_id
-            ))
-            .icon_url(icon_url);
-
         let embed_title = format!(
             "New {} Feature Artist! 🌟 🎵",
             artist_capital(suggestion.internal)
@@ -211,7 +193,6 @@ impl Data {
         }
 
         let embed = CreateEmbed::new()
-            .author(embed_author)
             .title(embed_title)
             .fields(embed_fields)
             .color((87, 242, 135));
@@ -220,7 +201,7 @@ impl Data {
             .send_message(
                 cache_http,
                 CreateMessage::new()
-                    .content(format!("<@&{}>", self.config.announcement_role))
+                    .content(format!("<@&{}> (suggested by <@{}>)", self.config.announcement_role, suggestion.user_id))
                     .embed(embed),
             )
             .await
