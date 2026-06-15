@@ -6,6 +6,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use poise::serenity_prelude::{MessageId, UserId};
 use sqlx::{Executor, SqlitePool, query, sqlite::SqliteConnectOptions};
+use tracing::warn;
 
 use crate::{
     types::{Poll, PollStatus, Suggestion},
@@ -168,7 +169,7 @@ pub async fn remove_suggestion_and_poll(pool: &SqlitePool, suggestion_id: u64) -
     .await
     .wrap_err("failed to insert deleted suggestion")?.last_insert_rowid();
 
-    let poll = query!(
+    let Ok(poll) = query!(
         "DELETE FROM polls
          WHERE id = ?
          RETURNING *",
@@ -176,7 +177,12 @@ pub async fn remove_suggestion_and_poll(pool: &SqlitePool, suggestion_id: u64) -
     )
     .fetch_one(pool)
     .await
-    .wrap_err("failed to remove poll")?;
+    else {
+        warn!(
+            "Failed to remove poll for suggestion #{suggestion_id}. This is fine if the suggestion did not have a poll."
+        );
+        return Ok(());
+    };
 
     query!(
         "UPDATE deleted_suggestions
